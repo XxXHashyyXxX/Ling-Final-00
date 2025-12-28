@@ -3,4 +3,5 @@ project(ling)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(ling src/main.cpp)
+add_executable(ling src/main.cpp
+                    src/frontend/Tokens.cpp)
