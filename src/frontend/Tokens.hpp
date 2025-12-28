@@ -19,6 +19,7 @@ namespace Tokenization {
             KeywordLet,
             KeywordIf,
             KeywordWhile,
+            KeywordDisplay,
             EndOfLine
         } type;
 
@@ -27,7 +28,7 @@ namespace Tokenization {
         Token(Type type, const std::string& value = "");
     };
 
-    std::vector<Token> tokenize(const std::string& source);
+    std::vector<Token> tokenize(std::string_view source);
 
     std::ostream& operator<<(std::ostream& os, const Token& token);
     std::ostream& operator<<(std::ostream& os, const Token::Type& type);

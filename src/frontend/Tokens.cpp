@@ -18,10 +18,11 @@ std::unordered_map<std::string, Token::Type> types = {{
     {"if", Token::Type::KeywordIf},
     {"let", Token::Type::KeywordLet},
     {"while", Token::Type::KeywordWhile},
+    {"display", Token::Type::KeywordDisplay},
     {";", Token::Type::EndOfLine}
 }};
 
-static bool matchKeyword(std::string::const_iterator it, std::string::const_iterator end, const std::string& key) {
+static bool matchKeyword(const char* it, const char* end, const std::string& key) {
     for(auto c : key) {
         if(it == end || *it != c) return false;
         ++it;
@@ -29,7 +30,7 @@ static bool matchKeyword(std::string::const_iterator it, std::string::const_iter
     return true;
 }
 
-static std::optional<Token::Type> matchLongestTokenType(std::string::const_iterator& it, std::string::const_iterator end) {
+static std::optional<Token::Type> matchLongestTokenType(const char* &it, const char* end) {
     struct Match {
         Token::Type type;
         size_t length;
@@ -49,11 +50,11 @@ static std::optional<Token::Type> matchLongestTokenType(std::string::const_itera
 
     if(!best.has_value()) return std::optional<Token::Type>();
     
-    std::advance(it, best->length);
+    it += best->length;
     return best->type;
 }
 
-std::vector<Token> Tokenization::tokenize(const std::string &source)
+std::vector<Token> Tokenization::tokenize(std::string_view source)
 {
     std::vector<Token> out;
     auto sourceEnd = source.end();
@@ -73,6 +74,7 @@ std::vector<Token> Tokenization::tokenize(const std::string &source)
 
         auto tokenType = matchLongestTokenType(it, source.end());
         if(tokenType) {
+            --it;
             out.emplace_back(*tokenType, "");
             continue;
         }
@@ -113,6 +115,8 @@ std::ostream &Tokenization::operator<<(std::ostream &os, const Token::Type &type
             return os << "let";
         case Token::Type::KeywordWhile:
             return os << "while";
+        case Token::Type::KeywordDisplay:
+            return os << "display";
         case Token::Type::Literal:
             return os << "literal: ";
         case Token::Type::OperatorAssign:
