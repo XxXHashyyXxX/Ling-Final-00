@@ -3,7 +3,7 @@
 #include "frontend/Tokens.hpp"
 #include "frontend/Parser.hpp"
 #include "backend/SymbolTable.hpp"
-
+#include "backend/IR.hpp"
 
 int main(int argc, char** argv) {
     if(argc != 2) {
@@ -22,36 +22,12 @@ int main(int argc, char** argv) {
     auto tokens = Tokenization::tokenize(buffer);
     auto result = Parser::parseTokens(tokens);
 
-    for(const auto& statement : result)
-    {
-        if(auto* ptr = dynamic_cast<VariableDeclaration*>(statement.get())) {
-            std::cout   <<  "Variable declaration:\n"
-                            "\tVariable name: " << ptr->identificator << "\n"
-                        <<  "\tVariable value: " << ptr->value->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<VariableAssignment*>(statement.get())) {
-            std::cout   <<  "Variable assignment:\n"
-                            "\tVariable name: " << ptr->identificator << "\n"
-                        <<  "\tVariable value: " << ptr->value->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<IfStatement*>(statement.get())) {
-            std::cout   <<  "If statement:\n"
-                            "\tCondition: " << ptr->condition->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<WhileStatement*>(statement.get())) {
-            std::cout   <<  "While statement:\n"
-                            "\tCondition: " << ptr->condition->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<DisplayStatement*>(statement.get())) {
-            std::cout   <<  "Display statement:\n"
-                            "\tVariable name: " << ptr->identificator << std::endl;
-        }
-    }
-
     SymbolTable table(result);
-    for(auto symbol : table)
+    BuilderIR ir(result);
+    std::cout << "_start:\n";
+    for(auto& instruction : ir.getCode())
     {
-        std::cout << "[Symbol table] Declared symbol: " << symbol << "\n";
+        std::cout << instruction << "\n";
     }
     
     return 0;

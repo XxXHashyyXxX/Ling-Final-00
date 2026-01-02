@@ -7,4 +7,5 @@ add_executable(ling src/main.cpp
                     src/frontend/Tokens.cpp
                     src/frontend/AST.cpp
                     src/frontend/Parser.cpp
-                    src/backend/SymbolTable.cpp)
+                    src/backend/SymbolTable.cpp
+                    src/backend/IR.cpp)
