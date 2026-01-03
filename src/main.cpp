@@ -2,6 +2,9 @@
 #include <fstream>
 #include "frontend/Tokens.hpp"
 #include "frontend/Parser.hpp"
+#include "backend/SymbolTable.hpp"
+#include "backend/IR.hpp"
+#include "backend/CodeGen.hpp"
 
 int main(int argc, char** argv) {
     if(argc != 2) {
@@ -9,7 +12,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::ifstream source(argv[1], std::ios::binary);
+    std::string srcPath(argv[1]);
+    srcPath.append(".ling");
+    std::ifstream source(srcPath, std::ios::binary);
     source.seekg(0, std::ios::end);
     std::size_t size = source.tellg();
     source.seekg(0);
@@ -20,31 +25,9 @@ int main(int argc, char** argv) {
     auto tokens = Tokenization::tokenize(buffer);
     auto result = Parser::parseTokens(tokens);
 
-    for(const auto& statement : result)
-    {
-        if(auto* ptr = dynamic_cast<VariableDeclaration*>(statement.get())) {
-            std::cout   <<  "Variable declaration:\n"
-                            "\tVariable name: " << ptr->identificator << "\n"
-                        <<  "\tVariable value: " << ptr->value->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<VariableAssignment*>(statement.get())) {
-            std::cout   <<  "Variable assignment:\n"
-                            "\tVariable name: " << ptr->identificator << "\n"
-                        <<  "\tVariable value: " << ptr->value->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<IfStatement*>(statement.get())) {
-            std::cout   <<  "If statement:\n"
-                            "\tCondition: " << ptr->condition->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<WhileStatement*>(statement.get())) {
-            std::cout   <<  "While statement:\n"
-                            "\tCondition: " << ptr->condition->getValue().value() << std::endl;
-        }
-        else if(auto* ptr = dynamic_cast<DisplayStatement*>(statement.get())) {
-            std::cout   <<  "Display statement:\n"
-                            "\tVariable name: " << ptr->identificator << std::endl;
-        }
-    }
+    SymbolTable table(result);
+    BuilderIR ir(result);
+    CodeGen::generateCode(argv[1], ir, table);
     
     return 0;
 }
