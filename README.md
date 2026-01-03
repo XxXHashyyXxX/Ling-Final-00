@@ -56,11 +56,19 @@ The Ling language defines the following expressions.
     -   `-` - representing subtraction
     -   `*` - representing multiplication
     -   `/` - representing division
-    Note that boolean operators, such as `&&` or `||` are not implemented and neither are bitwise operators. Again, this will be reworked in a future version.
+    -   `and` - representing boolean AND
+    -   `or` - representing boolean OR
+    -   relational operators:
+        -   `==`
+        -   `!=`
+        -   `>`
+        -   `<`
+        -   `>=`
+        -   `<=`
 -   Unary operator - if `p` is an expression, the unary operator lets the user manipulate it in a desired way. The following unary operators are defined in Ling.
     -   `+` - representing identity
     -   `-` - representing arithmetic negation
-    Note that boolean operators, such as `!` are not implemented and neither are bitwise operators. Again, this will be reworked in a future version.
+    -   `not` - representing boolean NOT
 
 ## Usage
 

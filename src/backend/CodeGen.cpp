@@ -74,6 +74,9 @@ struct InstructionGenerator {
     void operator()(BuilderIR::InstructionBranch branch) const;
     void operator()(BuilderIR::InstructionDisplay display) const;
     void operator()(BuilderIR::InstructionSet set) const;
+    void operator()(BuilderIR::InstructionCompareEqual cmpEqual) const;
+    void operator()(BuilderIR::InstructionCompareLess cmpLess) const;
+    void operator()(BuilderIR::InstructionCompareMore cmpMore) const;
 
     std::ostream& os;
 };
@@ -332,4 +335,85 @@ void InstructionGenerator::operator()(BuilderIR::InstructionSet set) const
 {
     os << generateMovImmediate("rax", set.value);
     os << generateMovToTempVar(set.destination, "rax");
+}
+
+void InstructionGenerator::operator()(BuilderIR::InstructionCompareEqual cmpEqual) const
+{
+    switch(cmpEqual.leftOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rax", cmpEqual.leftOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rax", cmpEqual.leftOperand.tempVar);
+        }
+    }
+
+    switch(cmpEqual.rightOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rbx", cmpEqual.rightOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rbx", cmpEqual.rightOperand.tempVar);
+        } break;
+    }
+
+    os << "\tcmp rax, rbx\n";
+    os << "\tje .L" << cmpEqual.ifEqual << "\n";
+    os << "\tjmp .L" << cmpEqual.ifNotEqual << "\n";
+}
+
+void InstructionGenerator::operator()(BuilderIR::InstructionCompareLess cmpLess) const
+{
+    switch(cmpLess.leftOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rax", cmpLess.leftOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rax", cmpLess.leftOperand.tempVar);
+        }
+    }
+
+    switch(cmpLess.rightOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rbx", cmpLess.rightOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rbx", cmpLess.rightOperand.tempVar);
+        } break;
+    }
+
+    os << "\tcmp rax, rbx\n";
+    os << "\tjl .L" << cmpLess.ifLess << "\n";
+    os << "\tjmp .L" << cmpLess.ifMore << "\n";
+}
+
+void InstructionGenerator::operator()(BuilderIR::InstructionCompareMore cmpMore) const
+{
+    switch(cmpMore.leftOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rax", cmpMore.leftOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rax", cmpMore.leftOperand.tempVar);
+        }
+    }
+
+    switch(cmpMore.rightOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rbx", cmpMore.rightOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rbx", cmpMore.rightOperand.tempVar);
+        } break;
+    }
+
+    os << "\tcmp rax, rbx\n";
+    os << "\tjg .L" << cmpMore.ifMore << "\n";
+    os << "\tjmp .L" << cmpMore.ifLess << "\n";
 }

@@ -66,7 +66,13 @@ public:
             Division,
             Modulo,
             And,
-            Or
+            Or,
+            Equals,
+            NotEquals,
+            GreaterThan,
+            GreaterEqual,
+            LessThan,
+            LessEqual
         };
 
         InstructionBinaryOperation(TempVarID destination, const Operation& operation, const Operand& leftOperand, const Operand& rightOperand);
@@ -119,6 +125,39 @@ public:
         friend std::ostream& operator<<(std::ostream& os, const InstructionBranch& i);
     };
 
+    struct InstructionCompareEqual {
+        InstructionCompareEqual(const Operand& leftOperand, const Operand& rightOperand, LabelID ifEqual, LabelID ifNotEqual);
+
+        Operand leftOperand;
+        Operand rightOperand;
+        LabelID ifEqual;
+        LabelID ifNotEqual;
+
+        friend std::ostream& operator<<(std::ostream& os, const InstructionCompareEqual& i);
+    };
+
+    struct InstructionCompareLess {
+        InstructionCompareLess(const Operand& leftOperand, const Operand& rightOperand, LabelID ifLess, LabelID ifMore);
+
+        Operand leftOperand;
+        Operand rightOperand;
+        LabelID ifLess;
+        LabelID ifMore;
+
+        friend std::ostream& operator<<(std::ostream& os, const InstructionCompareLess& i);
+    };
+
+    struct InstructionCompareMore {
+        InstructionCompareMore(const Operand& leftOperand, const Operand& rightOperand, LabelID ifMore, LabelID ifLess);
+
+        Operand leftOperand;
+        Operand rightOperand;
+        LabelID ifMore;
+        LabelID ifLess;
+
+        friend std::ostream& operator<<(std::ostream& os, const InstructionCompareMore& i);
+    };
+
     struct InstructionDisplay {
         InstructionDisplay(std::string_view symbol);
 
@@ -136,7 +175,10 @@ public:
         InstructionJump,
         InstructionBranch,
         InstructionDisplay,
-        InstructionSet
+        InstructionSet,
+        InstructionCompareEqual,
+        InstructionCompareMore,
+        InstructionCompareLess
     >;
 
     Operand lowerExpression(const std::unique_ptr<AST::Expression>& expression);

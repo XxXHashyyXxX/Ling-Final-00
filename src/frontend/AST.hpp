@@ -81,7 +81,13 @@ namespace AST {
             Division,
             Modulo,
             And,
-            Or
+            Or,
+            Equals,
+            NotEquals,
+            GreaterThan,
+            GreaterEqual,
+            LessThan,
+            LessEqual
         };
 
         BinaryOperation(OperationType operation, std::unique_ptr<Expression> leftOperand, std::unique_ptr<Expression> rightOperand);
@@ -100,7 +106,13 @@ namespace AST {
             {OperationType::Subtraction,    [](int a, int b) { return a - b; }},
             {OperationType::Modulo,         [](int a, int b) { return a % b; }},
             {OperationType::And,            [](int a, int b) { return a && b; }},
-            {OperationType::Or,             [](int a, int b) { return a || b; }}
+            {OperationType::Or,             [](int a, int b) { return a || b; }},
+            {OperationType::Equals,         [](int a, int b) { return a == b; }},
+            {OperationType::NotEquals,      [](int a, int b) { return a != b; }},
+            {OperationType::GreaterEqual,   [](int a, int b) { return a >= b; }},
+            {OperationType::GreaterThan,    [](int a, int b) { return a > b; }},
+            {OperationType::LessEqual,      [](int a, int b) { return a <= b; }},
+            {OperationType::LessThan,       [](int a, int b) { return a < b; }}
         }};
     };
     struct UnaryOperation : public Expression {

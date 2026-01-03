@@ -24,7 +24,13 @@ inline static std::unordered_map<AST::BinaryOperation::OperationType, BuilderIR:
     {AST::BinaryOperation::OperationType::Division, BuilderIR::InstructionBinaryOperation::Operation::Division},
     {AST::BinaryOperation::OperationType::Modulo, BuilderIR::InstructionBinaryOperation::Operation::Modulo},
     {AST::BinaryOperation::OperationType::And, BuilderIR::InstructionBinaryOperation::Operation::And},
-    {AST::BinaryOperation::OperationType::Or, BuilderIR::InstructionBinaryOperation::Operation::Or}
+    {AST::BinaryOperation::OperationType::Or, BuilderIR::InstructionBinaryOperation::Operation::Or},
+    {AST::BinaryOperation::OperationType::Equals, BuilderIR::InstructionBinaryOperation::Operation::Equals},
+    {AST::BinaryOperation::OperationType::NotEquals, BuilderIR::InstructionBinaryOperation::Operation::NotEquals},
+    {AST::BinaryOperation::OperationType::GreaterEqual, BuilderIR::InstructionBinaryOperation::Operation::GreaterEqual},
+    {AST::BinaryOperation::OperationType::GreaterThan, BuilderIR::InstructionBinaryOperation::Operation::GreaterThan},
+    {AST::BinaryOperation::OperationType::LessEqual, BuilderIR::InstructionBinaryOperation::Operation::LessEqual},
+    {AST::BinaryOperation::OperationType::LessThan, BuilderIR::InstructionBinaryOperation::Operation::LessThan}
 }};
 
 inline static std::unordered_map<AST::UnaryOperation::OperationType, BuilderIR::InstructionUnaryOperator::Operation> astUnopToIrUnop = {{
@@ -112,6 +118,90 @@ BuilderIR::Operand BuilderIR::lowerExpression(const std::unique_ptr<AST::Express
                 emit(InstructionBranch(leftOperand, valueTrue, keepChecking));
                 emit(InstructionLabel(keepChecking));
                 emit(InstructionBranch(rightOperand, valueTrue, valueFalse));
+                emit(InstructionLabel(valueFalse));
+                emit(InstructionSet(temp, 0));
+                emit(InstructionJump(done));
+                emit(InstructionLabel(valueTrue));
+                emit(InstructionSet(temp, 1));
+                emit(InstructionLabel(done));
+                return Operand::TempVar(temp);
+            }
+            case BuilderIR::InstructionBinaryOperation::Operation::Equals: {
+                TempVarID temp = allocateTempVar();
+                LabelID equal = allocateLabel();
+                LabelID notEqual = allocateLabel();
+                LabelID done = allocateLabel();
+                emit(InstructionCompareEqual(leftOperand, rightOperand, equal, notEqual));
+                emit(InstructionLabel(equal));
+                emit(InstructionSet(temp, 1));
+                emit(InstructionJump(done));
+                emit(InstructionLabel(notEqual));
+                emit(InstructionSet(temp, 0));
+                emit(InstructionLabel(done));
+                return Operand::TempVar(temp);
+            }
+            case BuilderIR::InstructionBinaryOperation::Operation::NotEquals: {
+                TempVarID temp = allocateTempVar();
+                LabelID notEqual = allocateLabel();
+                LabelID equal = allocateLabel();
+                LabelID done = allocateLabel();
+                emit(InstructionCompareEqual(leftOperand, rightOperand, equal, notEqual));
+                emit(InstructionLabel(equal));
+                emit(InstructionSet(temp, 0));
+                emit(InstructionJump(done));
+                emit(InstructionLabel(notEqual));
+                emit(InstructionSet(temp, 1));
+                emit(InstructionLabel(done));
+                return Operand::TempVar(temp);
+            }
+            case BuilderIR::InstructionBinaryOperation::Operation::GreaterEqual: {
+                TempVarID temp = allocateTempVar();
+                LabelID valueFalse = allocateLabel();
+                LabelID valueTrue = allocateLabel();
+                LabelID done = allocateLabel();
+                emit(InstructionCompareLess(leftOperand, rightOperand, valueFalse, valueTrue));
+                emit(InstructionLabel(valueFalse));
+                emit(InstructionSet(temp, 0));
+                emit(InstructionJump(done));
+                emit(InstructionLabel(valueTrue));
+                emit(InstructionSet(temp, 1));
+                emit(InstructionLabel(done));
+                return Operand::TempVar(temp);
+            }
+            case BuilderIR::InstructionBinaryOperation::Operation::GreaterThan: {
+                TempVarID temp = allocateTempVar();
+                LabelID valueTrue = allocateLabel();
+                LabelID valueFalse = allocateLabel();
+                LabelID done = allocateLabel();
+                emit(InstructionCompareMore(leftOperand, rightOperand, valueTrue, valueFalse));
+                emit(InstructionLabel(valueTrue));
+                emit(InstructionSet(temp, 1));
+                emit(InstructionJump(done));
+                emit(InstructionLabel(valueFalse));
+                emit(InstructionSet(temp, 0));
+                emit(InstructionLabel(done));
+                return Operand::TempVar(temp);
+            }
+            case BuilderIR::InstructionBinaryOperation::Operation::LessEqual: {
+                TempVarID temp = allocateTempVar();
+                LabelID valueFalse = allocateLabel();
+                LabelID valueTrue = allocateLabel();
+                LabelID done = allocateLabel();
+                emit(InstructionCompareMore(leftOperand, rightOperand, valueFalse, valueTrue));
+                emit(InstructionLabel(valueTrue));
+                emit(InstructionSet(temp, 1));
+                emit(InstructionJump(done));
+                emit(InstructionLabel(valueFalse));
+                emit(InstructionSet(temp, 0));
+                emit(InstructionLabel(done));
+                return Operand::TempVar(temp);
+            }
+            case BuilderIR::InstructionBinaryOperation::Operation::LessThan: {
+                TempVarID temp = allocateTempVar();
+                LabelID valueTrue = allocateLabel();
+                LabelID valueFalse = allocateLabel();
+                LabelID done = allocateLabel();
+                emit(InstructionCompareLess(leftOperand, rightOperand, valueTrue, valueFalse));
                 emit(InstructionLabel(valueFalse));
                 emit(InstructionSet(temp, 0));
                 emit(InstructionJump(done));
@@ -322,6 +412,21 @@ std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionBranch &i
     return os << "\tBRNZ " << i.condition << ", .L" << i.ifTrue << ", .L" << i.ifFalse;
 }
 
+std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionCompareEqual &i)
+{
+    return os;
+}
+
+std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionCompareLess &i)
+{
+    return os;
+}
+
+std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionCompareMore &i)
+{
+    return os;
+}
+
 std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionDisplay &i)
 {
     return os << "\tDISP " << i.symbol;
@@ -329,3 +434,12 @@ std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionDisplay &
 
 BuilderIR::InstructionSet::InstructionSet(TempVarID destination, int value)
     : destination(destination), value(value) {}
+
+BuilderIR::InstructionCompareEqual::InstructionCompareEqual(const Operand &leftOperand, const Operand &rightOperand, LabelID ifEqual, LabelID ifNotEqual)
+    : leftOperand(leftOperand), rightOperand(rightOperand), ifEqual(ifEqual), ifNotEqual(ifNotEqual) {}
+
+BuilderIR::InstructionCompareLess::InstructionCompareLess(const Operand &leftOperand, const Operand &rightOperand, LabelID ifLess, LabelID ifMore)
+    : leftOperand(leftOperand), rightOperand(rightOperand), ifLess(ifLess), ifMore(ifMore) {}
+
+BuilderIR::InstructionCompareMore::InstructionCompareMore(const Operand &leftOperand, const Operand &rightOperand, LabelID ifMore, LabelID ifLess)
+    : leftOperand(leftOperand), rightOperand(rightOperand), ifMore(ifMore), ifLess(ifLess) {}

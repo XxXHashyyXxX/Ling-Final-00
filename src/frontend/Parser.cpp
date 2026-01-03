@@ -105,19 +105,25 @@ std::vector<std::unique_ptr<Statement>> Parser::parseTokens(const std::vector<To
 }
 
 inline static const std::unordered_map<Token::Type, unsigned> binaryOperatorsPrecedence = {{
-    {Token::Type::OperatorPlus, 3},
-    {Token::Type::OperatorMinus, 3},
-    {Token::Type::OperatorSlash, 4},
-    {Token::Type::OperatorStar, 4},
-    {Token::Type::OperatorPercent, 4},
-    {Token::Type::OperatorAND, 2},
-    {Token::Type::OperatorOR, 1}
+    {Token::Type::OperatorPlus, 4},
+    {Token::Type::OperatorMinus, 4},
+    {Token::Type::OperatorSlash, 5},
+    {Token::Type::OperatorStar, 5},
+    {Token::Type::OperatorPercent, 5},
+    {Token::Type::OperatorAND, 1},
+    {Token::Type::OperatorOR, 0},
+    {Token::Type::ComparatorEquals, 2},
+    {Token::Type::ComparatorNotEquals, 2},
+    {Token::Type::ComparatorGreaterEqual, 3},
+    {Token::Type::ComparatorGreaterThan, 3},
+    {Token::Type::ComparatorLessEqual, 3},
+    {Token::Type::ComparatorLessThan, 3}
 }};
 
 inline static const std::unordered_map<Token::Type, unsigned> unaryOperatorsPrecedence = {{
-    {Token::Type::OperatorPlus, 4},
-    {Token::Type::OperatorMinus, 4},
-    {Token::Type::OperatorNOT, 4}
+    {Token::Type::OperatorPlus, 6},
+    {Token::Type::OperatorMinus, 6},
+    {Token::Type::OperatorNOT, 6}
 }};
 
 static unsigned getPrecedence(Token::Type type, Parser::OperatorArity arity)
@@ -162,7 +168,13 @@ static std::deque<std::pair<std::vector<Token>::const_iterator, std::optional<Pa
             case Token::Type::OperatorPercent:
             case Token::Type::OperatorAND:
             case Token::Type::OperatorOR:
-            case Token::Type::OperatorNOT: {
+            case Token::Type::OperatorNOT:
+            case Token::Type::ComparatorEquals:
+            case Token::Type::ComparatorGreaterEqual:
+            case Token::Type::ComparatorGreaterThan:
+            case Token::Type::ComparatorLessEqual:
+            case Token::Type::ComparatorLessThan:
+            case Token::Type::ComparatorNotEquals: {
                 auto arity = Parser::getOperatorArity(it, start);
                 auto canPlaceOperator = [&operatorsStack, &it, &arity]() -> bool {
                     if(operatorsStack.empty()) return true;
@@ -228,7 +240,13 @@ inline static const std::unordered_map<Token::Type, BinaryOperation::OperationTy
     {Token::Type::OperatorSlash, BinaryOperation::OperationType::Division},
     {Token::Type::OperatorPercent, BinaryOperation::OperationType::Modulo},
     {Token::Type::OperatorAND, BinaryOperation::OperationType::And},
-    {Token::Type::OperatorOR, BinaryOperation::OperationType::Or}
+    {Token::Type::OperatorOR, BinaryOperation::OperationType::Or},
+    {Token::Type::ComparatorEquals, BinaryOperation::OperationType::Equals},
+    {Token::Type::ComparatorNotEquals, BinaryOperation::OperationType::NotEquals},
+    {Token::Type::ComparatorGreaterEqual, BinaryOperation::OperationType::GreaterEqual},
+    {Token::Type::ComparatorGreaterThan, BinaryOperation::OperationType::GreaterThan},
+    {Token::Type::ComparatorLessEqual, BinaryOperation::OperationType::LessEqual},
+    {Token::Type::ComparatorLessThan, BinaryOperation::OperationType::LessThan}
 }};
 
 inline static const std::unordered_map<Token::Type, UnaryOperation::OperationType> unaryOperationTypes = {{
@@ -295,7 +313,13 @@ inline static const std::unordered_set<Token::Type> operators = {{
     Token::Type::OperatorPercent,
     Token::Type::OperatorAND,
     Token::Type::OperatorOR,
-    Token::Type::OperatorNOT
+    Token::Type::OperatorNOT,
+    Token::Type::ComparatorEquals,
+    Token::Type::ComparatorNotEquals,
+    Token::Type::ComparatorGreaterEqual,
+    Token::Type::ComparatorGreaterThan,
+    Token::Type::ComparatorLessEqual,
+    Token::Type::ComparatorLessThan
 }};
 
 Parser::OperatorArity Parser::getOperatorArity(std::vector<Token>::const_iterator &it, const std::vector<Token>::const_iterator &start)
