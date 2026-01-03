@@ -54,7 +54,8 @@ public:
             Addition,
             Subtraction,
             Multiplication,
-            Division
+            Division,
+            Modulo
         };
 
         InstructionBinaryOperation(TempVarID destination, const Operation& operation, const Operand& leftOperand, const Operand& rightOperand);

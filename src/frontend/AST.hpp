@@ -78,7 +78,8 @@ namespace AST {
             Addition,
             Subtraction,
             Multiplication,
-            Division
+            Division,
+            Modulo
         };
 
         BinaryOperation(OperationType operation, std::unique_ptr<Expression> leftOperand, std::unique_ptr<Expression> rightOperand);
@@ -94,7 +95,8 @@ namespace AST {
             {OperationType::Addition,       [](int a, int b) { return a + b; }},
             {OperationType::Division,       [](int a, int b) { return a / b; }},
             {OperationType::Multiplication, [](int a, int b) { return a * b; }},
-            {OperationType::Subtraction,    [](int a, int b) { return a - b; }}
+            {OperationType::Subtraction,    [](int a, int b) { return a - b; }},
+            {OperationType::Modulo,         [](int a, int b) { return a % b; }}
         }};
     };
     struct UnaryOperation : public Expression {

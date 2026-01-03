@@ -252,7 +252,14 @@ void InstructionGenerator::operator()(BuilderIR::InstructionBinaryOperation bina
             os << "\tmul rax, rbx\n";
         } break;
         case BuilderIR::InstructionBinaryOperation::Operation::Division: {
-            os << "\tdiv rax, rbx\n";
+            os << "\txor rdx, rdx\n";
+            os << "\tdiv rbx\n";
+        } break;
+        case BuilderIR::InstructionBinaryOperation::Operation::Modulo: {
+            os << "\txor rdx, rdx\n";
+            os << "\tdiv rbx\n";
+            os << generateMovToTempVar(binaryOperation.destination, "rdx");
+            return;
         } break;
     }
 

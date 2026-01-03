@@ -21,7 +21,8 @@ inline static std::unordered_map<AST::BinaryOperation::OperationType, BuilderIR:
     {AST::BinaryOperation::OperationType::Addition, BuilderIR::InstructionBinaryOperation::Operation::Addition},
     {AST::BinaryOperation::OperationType::Subtraction, BuilderIR::InstructionBinaryOperation::Operation::Subtraction},
     {AST::BinaryOperation::OperationType::Multiplication, BuilderIR::InstructionBinaryOperation::Operation::Multiplication},
-    {AST::BinaryOperation::OperationType::Division, BuilderIR::InstructionBinaryOperation::Operation::Division}
+    {AST::BinaryOperation::OperationType::Division, BuilderIR::InstructionBinaryOperation::Operation::Division},
+    {AST::BinaryOperation::OperationType::Modulo, BuilderIR::InstructionBinaryOperation::Operation::Modulo}
 }};
 
 BuilderIR::Operand BuilderIR::lowerExpression(const std::unique_ptr<AST::Expression>& expression)

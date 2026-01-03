@@ -108,7 +108,8 @@ inline static const std::unordered_map<Token::Type, unsigned> binaryOperatorsPre
     {Token::Type::OperatorPlus, 0},
     {Token::Type::OperatorMinus, 0},
     {Token::Type::OperatorSlash, 1},
-    {Token::Type::OperatorStar, 1}
+    {Token::Type::OperatorStar, 1},
+    {Token::Type::OperatorPercent, 1}
 }};
 
 inline static const std::unordered_map<Token::Type, unsigned> unaryOperatorsPrecedence = {{
@@ -154,7 +155,8 @@ static std::deque<std::pair<std::vector<Token>::const_iterator, std::optional<Pa
             case Token::Type::OperatorMinus:
             case Token::Type::OperatorPlus:
             case Token::Type::OperatorSlash:
-            case Token::Type::OperatorStar: {
+            case Token::Type::OperatorStar:
+            case Token::Type::OperatorPercent: {
                 auto arity = Parser::getOperatorArity(it, start);
                 auto canPlaceOperator = [&operatorsStack, &it, &arity]() -> bool {
                     if(operatorsStack.empty()) return true;
@@ -217,7 +219,8 @@ inline static const std::unordered_map<Token::Type, BinaryOperation::OperationTy
     {Token::Type::OperatorPlus, BinaryOperation::OperationType::Addition},
     {Token::Type::OperatorMinus, BinaryOperation::OperationType::Subtraction},
     {Token::Type::OperatorStar, BinaryOperation::OperationType::Multiplication},
-    {Token::Type::OperatorSlash, BinaryOperation::OperationType::Division}
+    {Token::Type::OperatorSlash, BinaryOperation::OperationType::Division},
+    {Token::Type::OperatorPercent, BinaryOperation::OperationType::Modulo}
 }};
 
 inline static const std::unordered_map<Token::Type, UnaryOperation::OperationType> unaryOperationTypes = {{
@@ -279,7 +282,8 @@ inline static const std::unordered_set<Token::Type> operators = {{
     Token::Type::OperatorMinus,
     Token::Type::OperatorPlus,
     Token::Type::OperatorSlash,
-    Token::Type::OperatorStar
+    Token::Type::OperatorStar,
+    Token::Type::OperatorPercent
 }};
 
 Parser::OperatorArity Parser::getOperatorArity(std::vector<Token>::const_iterator &it, const std::vector<Token>::const_iterator &start)

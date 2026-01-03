@@ -13,6 +13,7 @@ namespace Tokenization {
             OperatorMinus,
             OperatorStar,
             OperatorSlash,
+            OperatorPercent,
             OperatorAssign,
             ParenthesisLeft,
             ParenthesisRight,

@@ -13,6 +13,7 @@ std::unordered_map<std::string, Token::Type> types = {{
     {"-", Token::Type::OperatorMinus},
     {"*", Token::Type::OperatorStar},
     {"/", Token::Type::OperatorSlash},
+    {"%", Token::Type::OperatorPercent},
     {"(", Token::Type::ParenthesisLeft},
     {")", Token::Type::ParenthesisRight},
     {"if", Token::Type::KeywordIf},
@@ -131,6 +132,8 @@ std::ostream &Tokenization::operator<<(std::ostream &os, const Token::Type &type
             return os << '/';
         case Token::Type::OperatorStar:
             return os << '*';
+        case Token::Type::OperatorPercent:
+            return os << "%";
         case Token::Type::ParenthesisLeft:
             return os << '(';
         case Token::Type::ParenthesisRight:
