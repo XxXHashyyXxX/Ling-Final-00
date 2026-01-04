@@ -1,4 +1,5 @@
 #include "IR.hpp"
+#include <unordered_set>
 
 BuilderIR::Operand BuilderIR::Operand::Immediate(int value)
 {
@@ -221,6 +222,15 @@ BuilderIR::Operand BuilderIR::lowerExpression(const std::unique_ptr<AST::Express
     throw std::runtime_error("Unrecognized expression, unable to lower");
 }
 
+inline static const std::unordered_map<AST::BinaryOperation::OperationType, BuilderIR::InstructionBranchCmp::ComparisonType> comparisonExpressions = {{
+    {AST::BinaryOperation::OperationType::Equals, BuilderIR::InstructionBranchCmp::ComparisonType::Equals},
+    {AST::BinaryOperation::OperationType::NotEquals, BuilderIR::InstructionBranchCmp::ComparisonType::NotEquals},
+    {AST::BinaryOperation::OperationType::GreaterEqual, BuilderIR::InstructionBranchCmp::ComparisonType::GreaterEqual},
+    {AST::BinaryOperation::OperationType::GreaterThan, BuilderIR::InstructionBranchCmp::ComparisonType::Greater},
+    {AST::BinaryOperation::OperationType::LessEqual, BuilderIR::InstructionBranchCmp::ComparisonType::LessEqual},
+    {AST::BinaryOperation::OperationType::LessThan, BuilderIR::InstructionBranchCmp::ComparisonType::Less}
+}};
+
 void BuilderIR::lowerStatement(const std::unique_ptr<AST::Statement> &statement)
 {
     if(auto* letStatement = dynamic_cast<AST::VariableDeclaration*>(statement.get()))
@@ -245,6 +255,26 @@ void BuilderIR::lowerStatement(const std::unique_ptr<AST::Statement> &statement)
 
     if(auto* ifStatement = dynamic_cast<AST::IfStatement*>(statement.get()))
     {
+        if(auto* binaryCondition = dynamic_cast<AST::BinaryOperation*>(ifStatement->condition.get()))
+        {
+            auto astOperation = binaryCondition->operation;
+            if(comparisonExpressions.find(astOperation) != comparisonExpressions.end())
+            {
+                LabelID Lthen = allocateLabel();
+                LabelID Lend = allocateLabel();
+
+                Operand leftOperand = lowerExpression(binaryCondition->leftOperand);
+                Operand rightOperand = lowerExpression(binaryCondition->rightOperand);
+
+                auto operation = comparisonExpressions.at(astOperation);
+                emit(InstructionBranchCmp(operation, leftOperand, rightOperand, Lthen, Lend));
+                emit(InstructionLabel(Lthen));
+                lowerStatement(ifStatement->body);
+                emit(InstructionLabel(Lend));
+                return;
+            }
+        }
+
         Operand condition = lowerExpression(ifStatement->condition);
         LabelID Lthen = allocateLabel();
         LabelID Lend = allocateLabel();
@@ -258,6 +288,30 @@ void BuilderIR::lowerStatement(const std::unique_ptr<AST::Statement> &statement)
 
     if(auto* whileStatement = dynamic_cast<AST::WhileStatement*>(statement.get()))
     {
+        if(auto* binaryCondition = dynamic_cast<AST::BinaryOperation*>(whileStatement->condition.get()))
+        {
+            auto astOperation = binaryCondition->operation;
+            if(comparisonExpressions.find(astOperation) != comparisonExpressions.end())
+            {
+                LabelID Lcond = allocateLabel();
+                LabelID Lbody = allocateLabel();
+                LabelID Lend = allocateLabel();
+
+                emit(InstructionLabel(Lcond));
+                auto operation = comparisonExpressions.at(astOperation);
+                Operand leftOperand = lowerExpression(binaryCondition->leftOperand);
+                Operand rightOperand = lowerExpression(binaryCondition->rightOperand);
+                emit(InstructionBranchCmp(operation, leftOperand, rightOperand, Lbody, Lend));
+
+                emit(InstructionLabel(Lbody));
+                lowerStatement(whileStatement->body);
+                emit(InstructionJump(Lcond));
+
+                emit(InstructionLabel(Lend));
+                return;
+            }
+        }
+
         LabelID Lcond = allocateLabel();
         LabelID Lbody = allocateLabel();
         LabelID Lend = allocateLabel();
@@ -302,11 +356,63 @@ BuilderIR::TempVarID BuilderIR::getTempVarsCount() const
 BuilderIR::BuilderIR(const std::vector<std::unique_ptr<AST::Statement>> &program)
 {
     lowerProgram(program);
+    tryOptimize();
 }
 
 const std::vector<BuilderIR::Instruction> &BuilderIR::getCode() const
 {
     return code;
+}
+
+void BuilderIR::tryOptimize()
+{
+    for(auto it = code.begin(); it < code.end() - 1; ++it)
+    {
+        if(std::holds_alternative<BuilderIR::InstructionJump>(*it))
+        {
+            auto unreachable = ++it;
+            while(!std::holds_alternative<BuilderIR::InstructionLabel>(*it)) ++it;
+            auto nearestLabel = it;
+            if(unreachable > nearestLabel)
+            {
+                code.erase(unreachable, nearestLabel-1);
+                it = code.begin();
+            }
+        }
+
+        if(std::holds_alternative<BuilderIR::InstructionJump>(*it) && std::holds_alternative<BuilderIR::InstructionLabel>(*(it+1)))
+        {
+            auto& jump = std::get<BuilderIR::InstructionJump>(*it);
+            auto& label = std::get<BuilderIR::InstructionLabel>(*(it+1));
+            if(jump.destination != label.label) continue;
+            
+            it = code.erase(it);
+            --it;
+            continue;
+        }
+
+        if(std::holds_alternative<BuilderIR::InstructionLabel>(*it) && std::holds_alternative<BuilderIR::InstructionJump>(*(it+1)))
+        {
+            auto& label = std::get<BuilderIR::InstructionLabel>(*it);
+            auto& jump = std::get<BuilderIR::InstructionJump>(*(it+1));
+
+            if(label.label != jump.destination) continue;
+
+            for(auto& instruction : code)
+            {
+                if(std::holds_alternative<BuilderIR::InstructionJump>(instruction))
+                {
+                    auto& _jump = std::get<BuilderIR::InstructionJump>(instruction);
+                    if(_jump.destination == label.label)
+                        _jump.destination = jump.destination;
+                }
+            }
+
+            code.erase(it);
+            it = code.begin();
+            continue;
+        }
+    }
 }
 
 BuilderIR::TempVarID BuilderIR::allocateTempVar()
@@ -443,3 +549,6 @@ BuilderIR::InstructionCompareLess::InstructionCompareLess(const Operand &leftOpe
 
 BuilderIR::InstructionCompareMore::InstructionCompareMore(const Operand &leftOperand, const Operand &rightOperand, LabelID ifMore, LabelID ifLess)
     : leftOperand(leftOperand), rightOperand(rightOperand), ifMore(ifMore), ifLess(ifLess) {}
+
+BuilderIR::InstructionBranchCmp::InstructionBranchCmp(ComparisonType type, const Operand &leftOperand, const Operand &rightOperand, BuilderIR::LabelID ifTrue, BuilderIR::LabelID ifFalse)
+    : type(type), leftOperand(leftOperand), rightOperand(rightOperand), ifTrue(ifTrue), ifFalse(ifFalse) {}

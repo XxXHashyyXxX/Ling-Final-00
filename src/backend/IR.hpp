@@ -166,6 +166,25 @@ public:
         friend std::ostream& operator<<(std::ostream& os, const InstructionDisplay& i);
     };
 
+    struct InstructionBranchCmp {
+        enum class ComparisonType {
+            Equals,
+            NotEquals,
+            Greater,
+            GreaterEqual,
+            Less,
+            LessEqual
+        };
+
+        InstructionBranchCmp(ComparisonType type, const Operand& leftOperand, const Operand& rightOperand, BuilderIR::LabelID ifTrue, BuilderIR::LabelID ifFalse);
+
+        ComparisonType type;
+        Operand leftOperand;
+        Operand rightOperand;
+        BuilderIR::LabelID ifTrue;
+        BuilderIR::LabelID ifFalse;
+    };
+
     using Instruction = std::variant<
         InstructionLoad,
         InstructionStore,
@@ -178,7 +197,8 @@ public:
         InstructionSet,
         InstructionCompareEqual,
         InstructionCompareMore,
-        InstructionCompareLess
+        InstructionCompareLess,
+        InstructionBranchCmp
     >;
 
     Operand lowerExpression(const std::unique_ptr<AST::Expression>& expression);
@@ -189,6 +209,8 @@ public:
 
     BuilderIR(const std::vector<std::unique_ptr<AST::Statement>>& program);
     const std::vector<Instruction>& getCode() const;
+
+    void tryOptimize();
 
 private:
     std::vector<Instruction> code;

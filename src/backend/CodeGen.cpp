@@ -78,6 +78,7 @@ struct InstructionGenerator {
     void operator()(BuilderIR::InstructionCompareEqual cmpEqual) const;
     void operator()(BuilderIR::InstructionCompareLess cmpLess) const;
     void operator()(BuilderIR::InstructionCompareMore cmpMore) const;
+    void operator()(BuilderIR::InstructionBranchCmp branchCmp) const;
 
     std::ostream& os;
     const BuilderIR& builderIR;
@@ -474,4 +475,57 @@ void InstructionGenerator::operator()(BuilderIR::InstructionCompareMore cmpMore)
     os <<   "\tcmp rax, rbx\n"
             "\tjg .L" << cmpMore.ifMore << "\n"
             "\tjmp .L" << cmpMore.ifLess << "\n";
+}
+
+void InstructionGenerator::operator()(BuilderIR::InstructionBranchCmp branchCmp) const
+{
+    auto leftOperand = branchCmp.leftOperand;
+    auto rightOperand = branchCmp.rightOperand;
+
+    switch(leftOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rax", leftOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rax", leftOperand.tempVar);
+        } break;
+    }
+
+    switch(rightOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rbx", rightOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rbx", rightOperand.tempVar);
+        } break;
+    }
+
+    os << "\tcmp rax, rbx\n";
+
+    switch(branchCmp.type)
+    {
+        case BuilderIR::InstructionBranchCmp::ComparisonType::Equals: {
+            os << "\tje";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::NotEquals: {
+            os << "\tjne";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::Greater: {
+            os << "\tjg";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::GreaterEqual: {
+            os << "\tjge";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::Less: {
+            os << "\tjl";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::LessEqual: {
+            os << "\tjle";
+        } break;
+    }
+
+    os <<   " .L" << branchCmp.ifTrue << "\n"
+            "\tjmp .L" << branchCmp.ifFalse << "\n";
 }
