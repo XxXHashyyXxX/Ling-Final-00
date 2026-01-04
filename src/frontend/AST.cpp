@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <charconv>
 
+AST::Declaration::~Declaration() = default;
 AST::Statement::~Statement() = default;
 AST::Expression::~Expression() = default;
 AST::VariableData::~VariableData() = default;
@@ -9,14 +10,14 @@ AST::VariableData::~VariableData() = default;
 AST::VariableData::VariableData(const Tokenization::Token &token)
     : token(token) {}
 
-AST::VariableDeclaration::VariableDeclaration(const Tokenization::Token& token, std::unique_ptr<Expression> value)
+AST::LocalVariableDeclaration::LocalVariableDeclaration(const Tokenization::Token& token, std::unique_ptr<Expression> value)
     : AST::VariableData(token), identificator(token.value), value(std::move(value))
 {
     if(identificator.empty())
         throw std::invalid_argument("Cannot declare a variable with empty identificator");
 }
 
-std::string AST::VariableDeclaration::getName() const
+std::string AST::LocalVariableDeclaration::getName() const
 {
     return identificator;
 }
@@ -100,6 +101,11 @@ std::optional<int> AST::UnaryOperation::getValue() const
 
 AST::CodeBlock::CodeBlock(std::vector<std::unique_ptr<Statement>> block)
     : block(std::move(block)) {}
+
+std::string AST::VariableData::getName() const
+{
+    return token.value;
+}
 
 void AST::VariableData::resolve(unsigned offset)
 {

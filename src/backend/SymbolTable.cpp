@@ -58,7 +58,7 @@ void SymbolTable::resolve(AST::VariableData &variable)
 
 bool SymbolTable::validateStatement(const std::unique_ptr<AST::Statement> &statement)
 {
-    if(auto* ptr = dynamic_cast<AST::VariableDeclaration*>(statement.get())) {
+    if(auto* ptr = dynamic_cast<AST::LocalVariableDeclaration*>(statement.get())) {
         auto& variableData = *dynamic_cast<AST::VariableData*>(ptr);
         auto& expression = ptr->value;
         if(!validateExpression(expression)) return false;

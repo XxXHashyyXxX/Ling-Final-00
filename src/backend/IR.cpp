@@ -234,7 +234,7 @@ inline static const std::unordered_map<AST::BinaryOperation::OperationType, Buil
 
 void BuilderIR::lowerStatement(const std::unique_ptr<AST::Statement> &statement)
 {
-    if(auto* letStatement = dynamic_cast<AST::VariableDeclaration*>(statement.get()))
+    if(auto* letStatement = dynamic_cast<AST::LocalVariableDeclaration*>(statement.get()))
     {
         Operand value = lowerExpression(letStatement->value);
         auto& variable = *dynamic_cast<AST::VariableData*>(letStatement);

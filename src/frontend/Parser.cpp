@@ -59,7 +59,7 @@ std::unique_ptr<Statement> parseStatement(const std::vector<Token> &tokens, std:
             checkNext(Token::Type::OperatorAssign);
             ++it;
             auto value = Parser::parseExpression(tokens, it, Token::Type::EndOfLine);
-            return std::make_unique<VariableDeclaration>(identificator, std::move(value));
+            return std::make_unique<LocalVariableDeclaration>(identificator, std::move(value));
         } break;
         case Token::Type::Identificator: {
             const Tokenization::Token& identificator = *it;

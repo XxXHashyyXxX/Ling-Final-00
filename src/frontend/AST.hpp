@@ -9,6 +9,7 @@
 namespace AST {
 
     // ===== Base classes =====
+    struct Declaration { virtual ~Declaration() = 0; };
     struct Statement { virtual ~Statement() = 0; };
     struct Expression {
         virtual ~Expression() = 0;
@@ -21,21 +22,19 @@ namespace AST {
         unsigned offset = 0;
         bool resolved = false;
         
-        virtual std::string getName() const = 0;
+        std::string getName() const;
         void resolve(unsigned offset);
     
         const Tokenization::Token& token;
     };
 
     // ===== Statements =====
-    struct VariableDeclaration : public Statement, public VariableData {
-        VariableDeclaration(const Tokenization::Token& identificator, std::unique_ptr<Expression> value);
-        ~VariableDeclaration() = default;
+    struct LocalVariableDeclaration : public Statement, public VariableData {
+        LocalVariableDeclaration(const Tokenization::Token& identificator, std::unique_ptr<Expression> value);
+        ~LocalVariableDeclaration() = default;
 
         std::string identificator;
         std::unique_ptr<Expression> value;
-
-        std::string getName() const override;
     };
     struct VariableAssignment : public Statement, public VariableData {
         VariableAssignment(const Tokenization::Token& identificator, std::unique_ptr<Expression> value);
@@ -43,8 +42,6 @@ namespace AST {
 
         std::string identificator;
         std::unique_ptr<Expression> value;
-
-        std::string getName() const override;
     };
     struct IfStatement : public Statement {
         IfStatement(std::unique_ptr<Expression> condition, std::unique_ptr<Statement> body);
@@ -89,8 +86,6 @@ namespace AST {
         std::optional<int> getValue() const override;
 
         std::string identificator;
-
-        std::string getName() const override;
     };
     struct BinaryOperation : public Expression {
         enum class OperationType {
