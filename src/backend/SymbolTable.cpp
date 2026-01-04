@@ -10,12 +10,27 @@ SymbolTable::SymbolTable(const std::vector<std::unique_ptr<AST::Statement>> &sta
 
 void SymbolTable::addSymbol(const std::string &symbol)
 {
-    symbols.emplace(symbol);
+    auto status = _symbols.insert({symbol, currentOffset}).second;
+    if(!status) throw std::runtime_error("A symbol defined twice");
+
+    currentOffset += 8;
 }
 
 bool SymbolTable::doesSymbolExist(const std::string &symbol) const
 {
-    return symbols.contains(symbol);
+    return _symbols.find(symbol) != _symbols.end();
+}
+
+unsigned SymbolTable::getOffset() const
+{
+    return currentOffset;
+}
+
+unsigned SymbolTable::getOffset(const std::string &symbol) const
+{
+    if(!doesSymbolExist(symbol)) throw std::runtime_error("[Symbol table] Unrecognized symbol");
+
+    return _symbols.at(symbol);
 }
 
 std::unordered_set<std::string>::const_iterator SymbolTable::begin() const

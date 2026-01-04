@@ -63,12 +63,13 @@ __display__function__:
     ret)";
 
 struct InstructionGenerator {
-    InstructionGenerator(std::ostream& os) : os(os) {}
+    InstructionGenerator(std::ostream& os, const BuilderIR& builderIR, const SymbolTable& symbolTable) 
+        : os(os), builderIR(builderIR), symbolTable(symbolTable), localVariablesOffset(symbolTable.getOffset()) {}
 
     void operator()(BuilderIR::InstructionLoad load) const;
     void operator()(BuilderIR::InstructionStore store) const;
     void operator()(BuilderIR::InstructionBinaryOperation binaryOperation) const;
-    void operator()(BuilderIR::InstructionUnaryOperator negation) const;
+    void operator()(BuilderIR::InstructionUnaryOperator unaryOperation) const;
     void operator()(BuilderIR::InstructionLabel label) const;
     void operator()(BuilderIR::InstructionJump jump) const;
     void operator()(BuilderIR::InstructionBranch branch) const;
@@ -77,8 +78,28 @@ struct InstructionGenerator {
     void operator()(BuilderIR::InstructionCompareEqual cmpEqual) const;
     void operator()(BuilderIR::InstructionCompareLess cmpLess) const;
     void operator()(BuilderIR::InstructionCompareMore cmpMore) const;
+    void operator()(BuilderIR::InstructionBranchCmp branchCmp) const;
 
     std::ostream& os;
+    const BuilderIR& builderIR;
+    const SymbolTable& symbolTable;
+    const unsigned localVariablesOffset;
+
+    unsigned getLocaLVariableOffset(const std::string& symbol) const;
+    unsigned getTempVarOffset(BuilderIR::TempVarID temp) const;
+
+    std::string getLocalVariableAddress(const std::string& symbol) const;
+    std::string getTempVarAddress(BuilderIR::TempVarID temp) const;
+
+    std::string convertAddressToValue(const std::string& address) const;
+
+    std::string generateMovImmediate(const std::string& to, int immediate) const;
+    std::string generateMovImmediateToTempVar(BuilderIR::TempVarID temp, int immediate) const;
+    std::string generateMovImmediateToLocalVar(const std::string& symbol, int immediate) const;
+    std::string generateMovToTempVar(BuilderIR::TempVarID temp, const std::string& from) const;
+    std::string generateMovToLocalVar(const std::string& symbol, const std::string& from) const;
+    std::string generateMovFromTempVar(const std::string& to, BuilderIR::TempVarID temp) const;
+    std::string generateMovFromLocalVar(const std::string& to, const std::string& symbol) const;
 };
 
 inline static std::string generateMov(const std::string& to, const std::string& from)
@@ -86,125 +107,151 @@ inline static std::string generateMov(const std::string& to, const std::string& 
     return "\tmov " + to + ", " + from + "\n";
 }
 
-inline static std::string generateMovImmediate(const std::string& to, int immediate)
+CodeGen::CodeGen(const BuilderIR &builderIR, const SymbolTable &symbolTable)
+    : builderIR(builderIR), symbolTable(symbolTable) {}
+
+std::string CodeGen::generateAssembly(const std::string &name)
 {
-    std::ostringstream immediateString;
-    immediateString << immediate;
-    return generateMov(to, immediateString.str());
+    std::ofstream code(name + ".asm");
+
+    // set default mode to relative
+    code << "default rel\n";
+
+    // add .text section
+    code << "section .text\n"
+            "\tglobal _start\n"
+            "\textern __display__function__\n";
+
+    // add _start prologue
+    code << "_start:\n"
+            "\tpush rbp\n"
+            "\tmov rbp, rsp\n"
+            "\tsub rsp, " << 8 * builderIR.getTempVarsCount() + symbolTable.getOffset() << "\n";
+    
+    // generate code
+    auto& instructions = builderIR.getCode();
+    InstructionGenerator generator(code, builderIR, symbolTable);
+    
+    for(auto& instruction : instructions)
+    {
+        std::visit(generator, instruction);
+    }
+    
+    // add _start epilogue
+    code << "\tmov rsp, rbp\n"
+            "\tpop rbp\n";
+
+    // exit
+    code << "\tmov rax, 60\n"
+            "\txor rdi, rdi\n"
+            "\tsyscall";
+
+    code.close();
+    return name + ".asm";
 }
 
-inline static std::string generateMovImmediateToMemory(const std::string& to, int immediate)
+std::string CodeGen::generateObjectFile(const std::string &name)
 {
-    return generateMovImmediate("qword [" + to + "]", immediate);
+    std::system(("nasm -f elf64 " + name + ".asm -o " + name + ".o").c_str());
+    return name + ".o";
 }
 
-inline static std::string generateMovImmediateToTempVar(BuilderIR::TempVarID to, int immediate)
-{
-    std::ostringstream _to;
-    _to << to;
-    return generateMovImmediateToMemory("__tempVar__t" + _to.str(), immediate);
-}
-
-inline static std::string generateMovFromMemory(const std::string& toRegister, const std::string& from)
-{
-    return generateMov(toRegister, "qword [" + from + "]");
-}
-
-inline static std::string generateMovFromTempVar(const std::string& toRegister, BuilderIR::TempVarID from)
-{
-    std::ostringstream _from;
-    _from << "__tempVar__t" << from;
-    return generateMovFromMemory(toRegister, _from.str());
-}
-
-inline static std::string generateMovToMemory(const std::string& to, const std::string& fromRegister)
-{
-    return generateMov("qword [" + to + "]", fromRegister);
-}
-
-inline static std::string generateMovToTempVar(BuilderIR::TempVarID to, const std::string& fromRegister)
-{
-    std::ostringstream _to;
-    _to << "__tempVar__t" << to;
-    return generateMovToMemory(_to.str(), fromRegister);
-}
-
-std::string CodeGen::generateAssembly(std::string_view fileName, const BuilderIR& builderIR, const SymbolTable &symbolTable)
+void CodeGen::linkExecutable(const std::string &name)
 {
     std::ofstream displayFunctionAssemblyCode("__display__function__.asm");
     displayFunctionAssemblyCode << displayFunctionAssembly;
     displayFunctionAssemblyCode.close();
-
-    std::system(("rm -f " + std::string(fileName) + ".asm " + std::string(fileName)).c_str());
-    std::ofstream assemblyCode(std::string(fileName) + ".asm");
-
-    // set relative mode
-    assemblyCode << "default rel\n\n";
-    
-    // begin bss section
-    assemblyCode << "section .bss\n";
-    
-    // add bss symbol for each variable
-    for(auto& symbol : symbolTable)
-    {
-        assemblyCode << "\t" << symbol << "\tresq\t1\n";
-    }
-    
-    // add bss symbol for each temp var
-    for(auto i = 0; i < builderIR.getTempVarsCount(); ++i)
-    {
-        assemblyCode << "\t__tempVar__t" << i << "\tresq\t1\n";
-    }
-
-    assemblyCode << "\n";
-
-    // add text section
-    assemblyCode << "section .text\n"
-                    "\tglobal _start\n"
-                    "\textern __display__function__\n"
-                    "\n_start:\n";
-    
-    // generate code for each instruction
-    auto code = builderIR.getCode();
-    for(auto& instruction : code)
-    {
-        std::visit(InstructionGenerator(assemblyCode), instruction);
-    }
-
-    // generate epilogue
-    assemblyCode << "\tmov rax, 60\n"
-                    "\txor rdi, rdi\n"
-                    "\tsyscall\n";
-
-    assemblyCode.close();
-    return std::string(fileName) + ".asm";
-}
-
-std::string CodeGen::generateObjectFile(const std::string& asmFile, std::string_view fileName)
-{
-    std::string objectFile = std::string(fileName) + ".o";
-    std::system((std::string("nasm -f elf64 ") + asmFile + " -o " + objectFile).c_str());
     std::system("nasm -f elf64 __display__function__.asm -o __display__function__.o");
-    return objectFile;
+    std::system(("ld __display__function__.o " + name + ".o -o " + name).c_str());
+    std::system("rm -f __display__function__.asm __display__function__.o");
 }
 
-void CodeGen::linkObjectFile(const std::string& objectFile, std::string_view fileName)
+void CodeGen::generateExecutable(const std::string &name)
 {
-    std::system(("ld " + objectFile + " __display__function__.o -o " + std::string(fileName)).c_str());
+    auto assemblyName = generateAssembly(name);
+    auto objectName = generateObjectFile(name);
+    linkExecutable(name);
+
+    std::system(("rm -f " + assemblyName + " " + objectName).c_str());
 }
 
-void CodeGen::generateCode(std::string_view fileName, const BuilderIR& builderIR, const SymbolTable &symbolTable)
+unsigned InstructionGenerator::getLocaLVariableOffset(const std::string &symbol) const
 {
-    auto assemblyCode = generateAssembly(fileName, builderIR, symbolTable);
-    auto objectFile = generateObjectFile(assemblyCode, fileName);
-    linkObjectFile(objectFile, fileName);
+    return symbolTable.getOffset(symbol);
+}
 
-    std::system((std::string("rm ") + assemblyCode + " " + objectFile + " __display__function__.asm __display__function__.o").c_str());
+unsigned InstructionGenerator::getTempVarOffset(BuilderIR::TempVarID temp) const
+{
+    return localVariablesOffset + temp * 8;
+}
+
+std::string InstructionGenerator::getLocalVariableAddress(const std::string &symbol) const
+{
+    std::ostringstream oss;
+    oss << "rbp-" << getLocaLVariableOffset(symbol);
+    return oss.str();
+}
+
+std::string InstructionGenerator::getTempVarAddress(BuilderIR::TempVarID temp) const
+{
+    std::ostringstream oss;
+    oss << "rbp-" << getTempVarOffset(temp);
+    return oss.str();
+}
+
+std::string InstructionGenerator::convertAddressToValue(const std::string &address) const
+{
+    return "qword [" + address + "]";
+}
+
+std::string InstructionGenerator::generateMovImmediate(const std::string &to, int immediate) const
+{
+    std::ostringstream oss;
+    oss << immediate;
+    return generateMov(to, oss.str());
+}
+
+std::string InstructionGenerator::generateMovImmediateToTempVar(BuilderIR::TempVarID temp, int immediate) const
+{
+    std::ostringstream oss;
+    oss << immediate;
+    return generateMovToTempVar(temp, oss.str());
+}
+
+std::string InstructionGenerator::generateMovImmediateToLocalVar(const std::string &symbol, int immediate) const
+{
+    std::ostringstream oss;
+    oss << immediate;
+    return generateMovToLocalVar(symbol, oss.str());
+}
+
+std::string InstructionGenerator::generateMovToTempVar(BuilderIR::TempVarID temp, const std::string &from) const
+{
+    auto destination = convertAddressToValue(getTempVarAddress(temp));
+    return generateMov(destination, from);
+}
+
+std::string InstructionGenerator::generateMovToLocalVar(const std::string &symbol, const std::string &from) const
+{
+    auto destination = convertAddressToValue(getLocalVariableAddress(symbol));
+    return generateMov(destination, from);
+}
+
+std::string InstructionGenerator::generateMovFromTempVar(const std::string &to, BuilderIR::TempVarID temp) const
+{
+    auto source = convertAddressToValue(getTempVarAddress(temp));
+    return generateMov(to, source);
+}
+
+std::string InstructionGenerator::generateMovFromLocalVar(const std::string &to, const std::string &symbol) const
+{
+    auto source = convertAddressToValue(getLocalVariableAddress(symbol));
+    return generateMov(to, source);
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionLoad load) const
 {
-    os << generateMovFromMemory("rax", load.sourceSymbol);
+    os << generateMovFromLocalVar("rax", load.sourceSymbol);
     os << generateMovToTempVar(load.destination, "rax");
 }
 
@@ -213,34 +260,37 @@ void InstructionGenerator::operator()(BuilderIR::InstructionStore store) const
     switch(store.value.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediateToMemory(store.destinationSymbol, store.value.immediate);
+            os << generateMovImmediateToLocalVar(store.destinationSymbol, store.value.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
             os << generateMovFromTempVar("rax", store.value.tempVar);
-            os << generateMovToMemory(store.destinationSymbol, "rax");
+            os << generateMovToLocalVar(store.destinationSymbol, "rax");
         } break;
     }
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionBinaryOperation binaryOperation) const
 {
-    switch(binaryOperation.leftOperand.type)
+    auto leftOperand = binaryOperation.leftOperand;
+    auto rightOperand = binaryOperation.rightOperand;
+
+    switch(leftOperand.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rax", binaryOperation.leftOperand.immediate);
+            os << generateMovImmediate("rax", leftOperand.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rax", binaryOperation.leftOperand.tempVar);
+            os << generateMovFromTempVar("rax", leftOperand.tempVar);
         } break;
     }
 
-    switch(binaryOperation.rightOperand.type)
+    switch(rightOperand.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rbx", binaryOperation.rightOperand.immediate);
+            os << generateMovImmediate("rbx", rightOperand.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rbx", binaryOperation.rightOperand.tempVar);
+            os << generateMovFromTempVar("rbx", rightOperand.tempVar);   
         } break;
     }
 
@@ -273,29 +323,28 @@ void InstructionGenerator::operator()(BuilderIR::InstructionBinaryOperation bina
     os << generateMovToTempVar(binaryOperation.destination, "rax");
 }
 
-void InstructionGenerator::operator()(BuilderIR::InstructionUnaryOperator unary) const
+void InstructionGenerator::operator()(BuilderIR::InstructionUnaryOperator unaryOperation) const
 {
-    switch(unary.operand.type)
+    auto operand = unaryOperation.operand;
+
+    switch(operand.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rax", unary.operand.immediate);
+            os << generateMovImmediate("rax", operand.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rax", unary.operand.tempVar);
+            os << generateMovFromTempVar("rax", operand.tempVar);
         } break;
     }
 
-    switch(unary.operation)
+    switch(unaryOperation.operation)
     {
         case BuilderIR::InstructionUnaryOperator::Operation::Negation: {
             os << "\tneg rax\n";
         } break;
-        case BuilderIR::InstructionUnaryOperator::Operation::Not: {
-            os << "\tnot rax\n";
-        } break;
     }
 
-    os << generateMovToTempVar(unary.destination, "rax");
+    os << generateMovToTempVar(unaryOperation.destination, "rax");
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionLabel label) const
@@ -310,110 +359,173 @@ void InstructionGenerator::operator()(BuilderIR::InstructionJump jump) const
 
 void InstructionGenerator::operator()(BuilderIR::InstructionBranch branch) const
 {
-    switch(branch.condition.type)
+    auto condition = branch.condition;
+    
+    switch(condition.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rax", branch.condition.immediate);
+            os << generateMovImmediate("rax", condition.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rax", branch.condition.tempVar);
+            os << generateMovFromTempVar("rax", condition.tempVar);
         } break;
     }
 
-    os << "\ttest rax, rax\n";
-    os << "\tjnz .L" << branch.ifTrue << "\n";
-    os << "\tjmp .L" << branch.ifFalse << "\n";
+    os <<   "\ttest rax, rax\n"
+            "\tjnz .L" << branch.ifTrue << "\n"
+            "\tjmp .L" << branch.ifFalse << "\n";
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionDisplay display) const
 {
-    os << generateMovFromMemory("rdi", display.symbol);
+    os << generateMovFromLocalVar("rdi", display.symbol);
     os << "\tcall __display__function__\n";
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionSet set) const
 {
-    os << generateMovImmediate("rax", set.value);
-    os << generateMovToTempVar(set.destination, "rax");
+    os << generateMovImmediateToTempVar(set.destination, set.value);
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionCompareEqual cmpEqual) const
 {
-    switch(cmpEqual.leftOperand.type)
-    {
-        case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rax", cmpEqual.leftOperand.immediate);
-        } break;
-        case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rax", cmpEqual.leftOperand.tempVar);
-        }
-    }
+    auto leftOperand = cmpEqual.leftOperand;
+    auto rightOperand = cmpEqual.rightOperand;
 
-    switch(cmpEqual.rightOperand.type)
+    switch(leftOperand.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rbx", cmpEqual.rightOperand.immediate);
+            os << generateMovImmediate("rax", leftOperand.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rbx", cmpEqual.rightOperand.tempVar);
+            os << generateMovFromTempVar("rax", leftOperand.tempVar);
         } break;
     }
 
-    os << "\tcmp rax, rbx\n";
-    os << "\tje .L" << cmpEqual.ifEqual << "\n";
-    os << "\tjmp .L" << cmpEqual.ifNotEqual << "\n";
+    switch(rightOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rbx", rightOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rbx", rightOperand.tempVar);
+        } break;
+    }
+
+    os <<   "\tcmp rax, rbx\n"
+            "\tje .L" << cmpEqual.ifEqual << "\n"
+            "\tjmp .L" << cmpEqual.ifNotEqual << "\n";
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionCompareLess cmpLess) const
 {
-    switch(cmpLess.leftOperand.type)
-    {
-        case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rax", cmpLess.leftOperand.immediate);
-        } break;
-        case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rax", cmpLess.leftOperand.tempVar);
-        }
-    }
+    auto leftOperand = cmpLess.leftOperand;
+    auto rightOperand = cmpLess.rightOperand;
 
-    switch(cmpLess.rightOperand.type)
+    switch(leftOperand.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rbx", cmpLess.rightOperand.immediate);
+            os << generateMovImmediate("rax", leftOperand.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rbx", cmpLess.rightOperand.tempVar);
+            os << generateMovFromTempVar("rax", leftOperand.tempVar);
         } break;
     }
 
-    os << "\tcmp rax, rbx\n";
-    os << "\tjl .L" << cmpLess.ifLess << "\n";
-    os << "\tjmp .L" << cmpLess.ifMore << "\n";
+    switch(rightOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rbx", rightOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rbx", rightOperand.tempVar);
+        } break;
+    }
+
+    os <<   "\tcmp rax, rbx\n"
+            "\tjl .L" << cmpLess.ifLess << "\n"
+            "\tjmp .L" << cmpLess.ifMore << "\n";
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionCompareMore cmpMore) const
 {
-    switch(cmpMore.leftOperand.type)
+    auto leftOperand = cmpMore.leftOperand;
+    auto rightOperand = cmpMore.rightOperand;
+
+    switch(leftOperand.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rax", cmpMore.leftOperand.immediate);
+            os << generateMovImmediate("rax", leftOperand.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rax", cmpMore.leftOperand.tempVar);
-        }
+            os << generateMovFromTempVar("rax", leftOperand.tempVar);
+        } break;
     }
 
-    switch(cmpMore.rightOperand.type)
+    switch(rightOperand.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediate("rbx", cmpMore.rightOperand.immediate);
+            os << generateMovImmediate("rbx", rightOperand.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
-            os << generateMovFromTempVar("rbx", cmpMore.rightOperand.tempVar);
+            os << generateMovFromTempVar("rbx", rightOperand.tempVar);
+        } break;
+    }
+
+    os <<   "\tcmp rax, rbx\n"
+            "\tjg .L" << cmpMore.ifMore << "\n"
+            "\tjmp .L" << cmpMore.ifLess << "\n";
+}
+
+void InstructionGenerator::operator()(BuilderIR::InstructionBranchCmp branchCmp) const
+{
+    auto leftOperand = branchCmp.leftOperand;
+    auto rightOperand = branchCmp.rightOperand;
+
+    switch(leftOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rax", leftOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rax", leftOperand.tempVar);
+        } break;
+    }
+
+    switch(rightOperand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rbx", rightOperand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rbx", rightOperand.tempVar);
         } break;
     }
 
     os << "\tcmp rax, rbx\n";
-    os << "\tjg .L" << cmpMore.ifMore << "\n";
-    os << "\tjmp .L" << cmpMore.ifLess << "\n";
+
+    switch(branchCmp.type)
+    {
+        case BuilderIR::InstructionBranchCmp::ComparisonType::Equals: {
+            os << "\tje";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::NotEquals: {
+            os << "\tjne";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::Greater: {
+            os << "\tjg";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::GreaterEqual: {
+            os << "\tjge";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::Less: {
+            os << "\tjl";
+        } break;
+        case BuilderIR::InstructionBranchCmp::ComparisonType::LessEqual: {
+            os << "\tjle";
+        } break;
+    }
+
+    os <<   " .L" << branchCmp.ifTrue << "\n"
+            "\tjmp .L" << branchCmp.ifFalse << "\n";
 }

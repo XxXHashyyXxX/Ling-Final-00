@@ -43,8 +43,10 @@ int main(int argc, char** argv) {
     SymbolTable table(result);
     BuilderIR ir(result);
 
-    if(fullCompile) CodeGen::generateCode(src, ir, table);
-    else CodeGen::generateAssembly(src, ir, table);
+    CodeGen gen(ir, table);
+
+    if(fullCompile) gen.generateExecutable(src);
+    else gen.generateAssembly(src);
     
     return 0;
 }
