@@ -12,18 +12,26 @@ public:
     SymbolTable(const std::vector<std::unique_ptr<AST::Statement>>& statements);
     ~SymbolTable() = default;
 
-    void addSymbol(const std::string& symbol);
-    bool doesSymbolExist(const std::string& symbol) const;
     unsigned getOffset() const;
-    unsigned getOffset(const std::string& symbol) const;
-
-    std::unordered_set<std::string>::const_iterator begin() const;
-    std::unordered_set<std::string>::const_iterator end() const;
 
 private:
-    std::unordered_set<std::string> symbols;
+    struct Scope {
+        std::unordered_map<std::string, unsigned> symbols;
+        unsigned savedOffset = 0;
+    };
+
+    std::vector<Scope> scopes;
+
+    void enterScope();
+    void leaveScope();
+
+    void declare(AST::VariableData& variable);
+    void resolve(AST::VariableData& variable);
+
     std::unordered_map<std::string, unsigned> _symbols;
     bool validateStatement(const std::unique_ptr<AST::Statement>& statement);
-    bool isExpressionValid(const std::unique_ptr<AST::Expression>& expression) const;
+    bool validateExpression(const std::unique_ptr<AST::Expression>& expression);
+    
     unsigned currentOffset = 0;
+    unsigned maxOffset = 0;
 };

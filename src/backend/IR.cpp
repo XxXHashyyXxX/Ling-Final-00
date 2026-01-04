@@ -49,7 +49,8 @@ BuilderIR::Operand BuilderIR::lowerExpression(const std::unique_ptr<AST::Express
     if(auto* identificator = dynamic_cast<AST::VariableValue*>(expression.get()))
     {
         TempVarID temp = allocateTempVar();
-        emit(InstructionLoad(temp, identificator->identificator));
+        auto& variable = *dynamic_cast<AST::VariableData*>(identificator);
+        emit(InstructionLoad(temp, variable));
         return Operand::TempVar(temp);
     }
 
@@ -236,20 +237,23 @@ void BuilderIR::lowerStatement(const std::unique_ptr<AST::Statement> &statement)
     if(auto* letStatement = dynamic_cast<AST::VariableDeclaration*>(statement.get()))
     {
         Operand value = lowerExpression(letStatement->value);
-        emit(InstructionStore(letStatement->identificator, value));
+        auto& variable = *dynamic_cast<AST::VariableData*>(letStatement);
+        emit(InstructionStore(variable, value));
         return;
     }
 
     if(auto* assignStatement = dynamic_cast<AST::VariableAssignment*>(statement.get()))
     {
         Operand value = lowerExpression(assignStatement->value);
-        emit(InstructionStore(assignStatement->identificator, value));
+        auto& variable = *dynamic_cast<AST::VariableData*>(assignStatement);
+        emit(InstructionStore(variable, value));
         return;
     }
 
     if(auto* displayStatement = dynamic_cast<AST::DisplayStatement*>(statement.get()))
     {
-        emit(InstructionDisplay(displayStatement->identificator));
+        Operand expression = lowerExpression(displayStatement->expression);
+        emit(InstructionDisplay(expression));
         return;
     }
 
@@ -356,7 +360,7 @@ BuilderIR::TempVarID BuilderIR::getTempVarsCount() const
 BuilderIR::BuilderIR(const std::vector<std::unique_ptr<AST::Statement>> &program)
 {
     lowerProgram(program);
-    tryOptimize();
+    //tryOptimize();
 }
 
 const std::vector<BuilderIR::Instruction> &BuilderIR::getCode() const
@@ -370,13 +374,17 @@ void BuilderIR::tryOptimize()
     {
         if(std::holds_alternative<BuilderIR::InstructionJump>(*it))
         {
-            auto unreachable = ++it;
-            while(!std::holds_alternative<BuilderIR::InstructionLabel>(*it)) ++it;
-            auto nearestLabel = it;
-            if(unreachable > nearestLabel)
+            auto jumpIt = it;
+            auto unreachable = std::next(jumpIt);
+            auto scan = unreachable;
+
+            while(scan != code.end() && !std::holds_alternative<InstructionLabel>(*scan))
+                ++scan;
+            
+            if(scan != code.end() && unreachable != scan)
             {
-                code.erase(unreachable, nearestLabel-1);
-                it = code.begin();
+                code.erase(unreachable, scan);
+                it = std::prev(jumpIt);
             }
         }
 
@@ -425,12 +433,6 @@ BuilderIR::LabelID BuilderIR::allocateLabel()
     return nextLabel++;
 }
 
-BuilderIR::InstructionLoad::InstructionLoad(TempVarID destination, std::string_view sourceSymbol)
-    : destination(destination), sourceSymbol(sourceSymbol) {}
-
-BuilderIR::InstructionStore::InstructionStore(std::string_view destinationSymbol, const Operand &value)
-    : destinationSymbol(destinationSymbol), value(value) {}
-
 BuilderIR::InstructionBinaryOperation::InstructionBinaryOperation(TempVarID destination, const Operation &operation, const Operand &leftOperand, const Operand &rightOperand)
     : destination(destination), operation(operation), leftOperand(leftOperand), rightOperand(rightOperand) {}
 
@@ -446,98 +448,6 @@ BuilderIR::InstructionJump::InstructionJump(LabelID destination)
 BuilderIR::InstructionBranch::InstructionBranch(const Operand &condition, LabelID ifTrue, LabelID ifFalse)
     : condition(condition), ifTrue(ifTrue), ifFalse(ifFalse) {}
 
-BuilderIR::InstructionDisplay::InstructionDisplay(std::string_view symbol)
-    : symbol(symbol) {}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::Operand &op)
-{
-    switch(op.type)
-    {
-        case BuilderIR::Operand::Type::Immediate:
-            return os << op.immediate;
-        case BuilderIR::Operand::Type::Temporary:
-            return os << "t" << op.tempVar;
-    }
-
-    return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionLoad &i)
-{
-    return os << "\tLOAD t" << i.destination << ", [" << i.sourceSymbol << "]";
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionStore &i)
-{
-    return os << "\tSTORE [" << i.destinationSymbol << "], " << i.value;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionSet &i)
-{
-    return os << "\tSET t" << i.destination << ", " << i.value;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionBinaryOperation &i)
-{
-    switch(i.operation)
-    {
-        case BuilderIR::InstructionBinaryOperation::Operation::Addition: {
-            os << "\tADD t";
-        } break;
-        case BuilderIR::InstructionBinaryOperation::Operation::Subtraction: {
-            os << "\tSUB t";
-        } break;
-        case BuilderIR::InstructionBinaryOperation::Operation::Multiplication: {
-            os << "\tMUL t";
-        } break;
-        case BuilderIR::InstructionBinaryOperation::Operation::Division: {
-            os << "\tDIV t";
-        } break;
-    }
-
-    return os << i.destination << ", " << i.leftOperand << ", " << i.rightOperand;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionUnaryOperator &i)
-{
-    return os << "\tNEG t" << i.destination << ", " << i.operand;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionLabel &i)
-{
-    return os << ".L" << i.label << ":";
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionJump &i)
-{
-    return os << "\tJMP .L" << i.destination;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionBranch &i)
-{
-    return os << "\tBRNZ " << i.condition << ", .L" << i.ifTrue << ", .L" << i.ifFalse;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionCompareEqual &i)
-{
-    return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionCompareLess &i)
-{
-    return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionCompareMore &i)
-{
-    return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const BuilderIR::InstructionDisplay &i)
-{
-    return os << "\tDISP " << i.symbol;
-}
-
 BuilderIR::InstructionSet::InstructionSet(TempVarID destination, int value)
     : destination(destination), value(value) {}
 
@@ -552,3 +462,12 @@ BuilderIR::InstructionCompareMore::InstructionCompareMore(const Operand &leftOpe
 
 BuilderIR::InstructionBranchCmp::InstructionBranchCmp(ComparisonType type, const Operand &leftOperand, const Operand &rightOperand, BuilderIR::LabelID ifTrue, BuilderIR::LabelID ifFalse)
     : type(type), leftOperand(leftOperand), rightOperand(rightOperand), ifTrue(ifTrue), ifFalse(ifFalse) {}
+
+BuilderIR::InstructionLoad::InstructionLoad(TempVarID destination, const AST::VariableData &sourceVariable)
+    : destination(destination), offset(sourceVariable.offset) {}
+
+BuilderIR::InstructionStore::InstructionStore(const AST::VariableData &destinationVariable, const Operand &value)
+    : offset(destinationVariable.offset), value(value) {}
+
+BuilderIR::InstructionDisplay::InstructionDisplay(Operand operand)
+    : operand(operand) {}

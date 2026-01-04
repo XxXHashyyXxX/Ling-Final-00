@@ -25,28 +25,22 @@ public:
         static Operand Immediate(int value);
         static Operand TempVar(TempVarID);
 
-        friend std::ostream& operator<<(std::ostream& os, const Operand& op);
-
     private:
         Operand(Type type);
     };
 
     struct InstructionLoad {
-        InstructionLoad(TempVarID destination, std::string_view sourceSymbol);
+        InstructionLoad(TempVarID destination, const AST::VariableData& sourceVariable);
 
         TempVarID destination;
-        std::string sourceSymbol;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionLoad& i);
+        unsigned offset;
     };
 
     struct InstructionStore {
-        InstructionStore(std::string_view destinationSymbol, const Operand& value);
+        InstructionStore(const AST::VariableData& destinationVariable, const Operand& value);
 
-        std::string destinationSymbol;
+        unsigned offset;
         Operand value;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionStore& i);
     };
 
     struct InstructionSet {
@@ -54,8 +48,6 @@ public:
 
         TempVarID destination;
         int value;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionSet& i);
     };
 
     struct InstructionBinaryOperation {
@@ -80,8 +72,6 @@ public:
         TempVarID destination;
         Operation operation;
         Operand leftOperand, rightOperand;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionBinaryOperation& i);
     };
 
     struct InstructionUnaryOperator {
@@ -95,24 +85,18 @@ public:
         TempVarID destination;
         Operand operand;
         Operation operation;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionUnaryOperator& i);
     };
 
     struct InstructionLabel {
         InstructionLabel(LabelID label);
 
         LabelID label;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionLabel& i);
     };
 
     struct InstructionJump {
         InstructionJump(LabelID destination);
 
         LabelID destination;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionJump& i);
     };
 
     struct InstructionBranch {
@@ -121,8 +105,6 @@ public:
         Operand condition;
         LabelID ifTrue;
         LabelID ifFalse;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionBranch& i);
     };
 
     struct InstructionCompareEqual {
@@ -132,8 +114,6 @@ public:
         Operand rightOperand;
         LabelID ifEqual;
         LabelID ifNotEqual;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionCompareEqual& i);
     };
 
     struct InstructionCompareLess {
@@ -143,8 +123,6 @@ public:
         Operand rightOperand;
         LabelID ifLess;
         LabelID ifMore;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionCompareLess& i);
     };
 
     struct InstructionCompareMore {
@@ -154,16 +132,12 @@ public:
         Operand rightOperand;
         LabelID ifMore;
         LabelID ifLess;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionCompareMore& i);
     };
 
     struct InstructionDisplay {
-        InstructionDisplay(std::string_view symbol);
+        InstructionDisplay(Operand operand);
 
-        std::string symbol;
-
-        friend std::ostream& operator<<(std::ostream& os, const InstructionDisplay& i);
+        Operand operand;
     };
 
     struct InstructionBranchCmp {
@@ -229,12 +203,4 @@ template <class T>
 inline void BuilderIR::emit(T &&instruction)
 {
     code.emplace_back(std::forward<T>(instruction));   
-}
-
-inline std::ostream& operator<<(std::ostream& os, const BuilderIR::Instruction& instruction)
-{
-    std::visit([&](const auto& v) {
-        os << v;
-    }, instruction);
-    return os;
 }

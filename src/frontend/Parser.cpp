@@ -6,6 +6,7 @@
 #include <utility>
 #include <iostream>
 #include <initializer_list>
+#include <sstream>
 
 /**
  *  Possible statements:
@@ -75,10 +76,9 @@ std::unique_ptr<Statement> parseStatement(const std::vector<Token> &tokens, std:
             return std::make_unique<WhileStatement>(std::move(condition), std::move(body));
         } break;
         case Token::Type::KeywordDisplay: {
-            checkNext(Token::Type::Identificator);
-            std::string_view identificator = it->value;
-            checkNext(Token::Type::EndOfLine);
-            return std::make_unique<DisplayStatement>(identificator);
+            ++it;
+            auto expression = Parser::parseExpression(tokens, it, Token::Type::EndOfLine);
+            return std::make_unique<DisplayStatement>(std::move(expression));
         } break;
         case Token::Type::BraceLeft: {
             ++it;
@@ -215,7 +215,9 @@ static std::deque<std::pair<std::vector<Token>::const_iterator, std::optional<Pa
                     break;
                 }
                 
-                throw std::runtime_error("Unexpected token");
+                std::ostringstream oss;
+                oss << "Unexpected token: " << *it;
+                throw std::runtime_error(oss.str());
             } break;
         }
 

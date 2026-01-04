@@ -85,21 +85,20 @@ struct InstructionGenerator {
     const SymbolTable& symbolTable;
     const unsigned localVariablesOffset;
 
-    unsigned getLocaLVariableOffset(const std::string& symbol) const;
     unsigned getTempVarOffset(BuilderIR::TempVarID temp) const;
 
-    std::string getLocalVariableAddress(const std::string& symbol) const;
+    std::string getAddresFromOffset(unsigned offset) const;
     std::string getTempVarAddress(BuilderIR::TempVarID temp) const;
 
     std::string convertAddressToValue(const std::string& address) const;
 
     std::string generateMovImmediate(const std::string& to, int immediate) const;
     std::string generateMovImmediateToTempVar(BuilderIR::TempVarID temp, int immediate) const;
-    std::string generateMovImmediateToLocalVar(const std::string& symbol, int immediate) const;
+    std::string generateMovImmediateToLocalVar(unsigned variableOffset, int immediate) const;
     std::string generateMovToTempVar(BuilderIR::TempVarID temp, const std::string& from) const;
-    std::string generateMovToLocalVar(const std::string& symbol, const std::string& from) const;
+    std::string generateMovToLocalVar(unsigned variableOffset, const std::string& from) const;
     std::string generateMovFromTempVar(const std::string& to, BuilderIR::TempVarID temp) const;
-    std::string generateMovFromLocalVar(const std::string& to, const std::string& symbol) const;
+    std::string generateMovFromLocalVar(const std::string& to, unsigned variableOffset) const;
 };
 
 inline static std::string generateMov(const std::string& to, const std::string& from)
@@ -175,28 +174,21 @@ void CodeGen::generateExecutable(const std::string &name)
     std::system(("rm -f " + assemblyName + " " + objectName).c_str());
 }
 
-unsigned InstructionGenerator::getLocaLVariableOffset(const std::string &symbol) const
-{
-    return symbolTable.getOffset(symbol);
-}
-
 unsigned InstructionGenerator::getTempVarOffset(BuilderIR::TempVarID temp) const
 {
     return localVariablesOffset + temp * 8;
 }
 
-std::string InstructionGenerator::getLocalVariableAddress(const std::string &symbol) const
+std::string InstructionGenerator::getAddresFromOffset(unsigned offset) const
 {
     std::ostringstream oss;
-    oss << "rbp-" << getLocaLVariableOffset(symbol);
+    oss << "rbp-" << offset;
     return oss.str();
 }
 
 std::string InstructionGenerator::getTempVarAddress(BuilderIR::TempVarID temp) const
 {
-    std::ostringstream oss;
-    oss << "rbp-" << getTempVarOffset(temp);
-    return oss.str();
+    return getAddresFromOffset(getTempVarOffset(temp));
 }
 
 std::string InstructionGenerator::convertAddressToValue(const std::string &address) const
@@ -218,22 +210,9 @@ std::string InstructionGenerator::generateMovImmediateToTempVar(BuilderIR::TempV
     return generateMovToTempVar(temp, oss.str());
 }
 
-std::string InstructionGenerator::generateMovImmediateToLocalVar(const std::string &symbol, int immediate) const
-{
-    std::ostringstream oss;
-    oss << immediate;
-    return generateMovToLocalVar(symbol, oss.str());
-}
-
 std::string InstructionGenerator::generateMovToTempVar(BuilderIR::TempVarID temp, const std::string &from) const
 {
     auto destination = convertAddressToValue(getTempVarAddress(temp));
-    return generateMov(destination, from);
-}
-
-std::string InstructionGenerator::generateMovToLocalVar(const std::string &symbol, const std::string &from) const
-{
-    auto destination = convertAddressToValue(getLocalVariableAddress(symbol));
     return generateMov(destination, from);
 }
 
@@ -243,15 +222,28 @@ std::string InstructionGenerator::generateMovFromTempVar(const std::string &to, 
     return generateMov(to, source);
 }
 
-std::string InstructionGenerator::generateMovFromLocalVar(const std::string &to, const std::string &symbol) const
+std::string InstructionGenerator::generateMovImmediateToLocalVar(unsigned variableOffset, int immediate) const
 {
-    auto source = convertAddressToValue(getLocalVariableAddress(symbol));
+    std::ostringstream oss;
+    oss << immediate;
+    return generateMovToLocalVar(variableOffset, oss.str());
+}
+
+std::string InstructionGenerator::generateMovToLocalVar(unsigned variableOffset, const std::string& from) const
+{
+    auto destination = convertAddressToValue(getAddresFromOffset(variableOffset));
+    return generateMov(destination, from);
+}
+
+std::string InstructionGenerator::generateMovFromLocalVar(const std::string& to, unsigned variableOffset) const
+{
+    auto source = convertAddressToValue(getAddresFromOffset(variableOffset));
     return generateMov(to, source);
 }
 
 void InstructionGenerator::operator()(BuilderIR::InstructionLoad load) const
 {
-    os << generateMovFromLocalVar("rax", load.sourceSymbol);
+    os << generateMovFromLocalVar("rax", load.offset);
     os << generateMovToTempVar(load.destination, "rax");
 }
 
@@ -260,11 +252,11 @@ void InstructionGenerator::operator()(BuilderIR::InstructionStore store) const
     switch(store.value.type)
     {
         case BuilderIR::Operand::Type::Immediate: {
-            os << generateMovImmediateToLocalVar(store.destinationSymbol, store.value.immediate);
+            os << generateMovImmediateToLocalVar(store.offset, store.value.immediate);
         } break;
         case BuilderIR::Operand::Type::Temporary: {
             os << generateMovFromTempVar("rax", store.value.tempVar);
-            os << generateMovToLocalVar(store.destinationSymbol, "rax");
+            os << generateMovToLocalVar(store.offset, "rax");
         } break;
     }
 }
@@ -378,7 +370,18 @@ void InstructionGenerator::operator()(BuilderIR::InstructionBranch branch) const
 
 void InstructionGenerator::operator()(BuilderIR::InstructionDisplay display) const
 {
-    os << generateMovFromLocalVar("rdi", display.symbol);
+    auto operand = display.operand;
+
+    switch(operand.type)
+    {
+        case BuilderIR::Operand::Type::Immediate: {
+            os << generateMovImmediate("rdi", operand.immediate);
+        } break;
+        case BuilderIR::Operand::Type::Temporary: {
+            os << generateMovFromTempVar("rdi", operand.tempVar);
+        } break;
+    }
+
     os << "\tcall __display__function__\n";
 }
 

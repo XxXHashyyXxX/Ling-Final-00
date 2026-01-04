@@ -4,12 +4,18 @@
 
 AST::Statement::~Statement() = default;
 AST::Expression::~Expression() = default;
+AST::VariableData::~VariableData() = default;
 
 AST::VariableDeclaration::VariableDeclaration(std::string_view identificator, std::unique_ptr<Expression> value)
     : identificator(identificator), value(std::move(value)) 
 {
     if(identificator.empty())
         throw std::invalid_argument("Cannot declare a variable with empty identificator");
+}
+
+std::string AST::VariableDeclaration::getName() const
+{
+    return identificator;
 }
 
 AST::VariableAssignment::VariableAssignment(std::string_view identificator, std::unique_ptr<Expression> value)
@@ -19,22 +25,21 @@ AST::VariableAssignment::VariableAssignment(std::string_view identificator, std:
         throw std::invalid_argument("Cannot assign to a variable with empty identificator");
 }
 
+std::string AST::VariableAssignment::getName() const
+{
+    return identificator;
+}
+
 AST::IfStatement::IfStatement(std::unique_ptr<Expression> condition, std::unique_ptr<Statement> body)
     : condition(std::move(condition)), body(std::move(body))
-{
-}
+{}
 
 AST::WhileStatement::WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<Statement> body)
     : condition(std::move(condition)), body(std::move(body))
-{
-}
+{}
 
-AST::DisplayStatement::DisplayStatement(std::string_view identificator)
-    : identificator(identificator)
-{
-    if(identificator.empty())
-        throw std::invalid_argument("Cannot display a variable with empty identificator");
-}
+AST::DisplayStatement::DisplayStatement(std::unique_ptr<Expression> expression)
+    : expression(std::move(expression)) {}
 
 AST::LiteralValue::LiteralValue(std::string_view value)
 {
@@ -53,6 +58,11 @@ AST::VariableValue::VariableValue(std::string_view identificator)
 std::optional<int> AST::VariableValue::getValue() const
 {
     return std::optional<int>();
+}
+
+std::string AST::VariableValue::getName() const
+{
+    return identificator;
 }
 
 AST::BinaryOperation::BinaryOperation(OperationType operation, std::unique_ptr<Expression> leftOperand, std::unique_ptr<Expression> rightOperand)
@@ -87,3 +97,11 @@ std::optional<int> AST::UnaryOperation::getValue() const
 
 AST::CodeBlock::CodeBlock(std::vector<std::unique_ptr<Statement>> block)
     : block(std::move(block)) {}
+
+void AST::VariableData::resolve(unsigned offset)
+{
+    if(resolved) return;
+
+    this->offset = offset;
+    resolved = true;
+}

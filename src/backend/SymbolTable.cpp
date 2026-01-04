@@ -8,90 +8,114 @@ SymbolTable::SymbolTable(const std::vector<std::unique_ptr<AST::Statement>> &sta
     }
 }
 
-void SymbolTable::addSymbol(const std::string &symbol)
-{
-    auto status = _symbols.insert({symbol, currentOffset}).second;
-    if(!status) throw std::runtime_error("A symbol defined twice");
-
-    currentOffset += 8;
-}
-
-bool SymbolTable::doesSymbolExist(const std::string &symbol) const
-{
-    return _symbols.find(symbol) != _symbols.end();
-}
-
 unsigned SymbolTable::getOffset() const
 {
-    return currentOffset;
+    return maxOffset;
 }
 
-unsigned SymbolTable::getOffset(const std::string &symbol) const
+void SymbolTable::enterScope()
 {
-    if(!doesSymbolExist(symbol)) throw std::runtime_error("[Symbol table] Unrecognized symbol");
-
-    return _symbols.at(symbol);
+    Scope scope;
+    scope.savedOffset = currentOffset;
+    scopes.push_back(std::move(scope));
 }
 
-std::unordered_set<std::string>::const_iterator SymbolTable::begin() const
+void SymbolTable::leaveScope()
 {
-    return symbols.begin();
+    if(scopes.empty()) throw std::runtime_error("[Symbol table] Trying to leave scope that was not entered");
+    currentOffset = scopes.back().savedOffset;
+    scopes.pop_back();
 }
 
-std::unordered_set<std::string>::const_iterator SymbolTable::end() const
+void SymbolTable::declare(AST::VariableData &variable)
 {
-    return symbols.end();
+    if(scopes.empty()) enterScope();
+
+    auto name = variable.getName();
+    auto& top = scopes.back();
+    if(top.symbols.find(name) != top.symbols.end()) throw std::runtime_error("[Symbol table] Trying to double declare a variable");
+
+    currentOffset += 8;
+
+    variable.resolve(currentOffset);
+    top.symbols.emplace(name, currentOffset);
+    if(maxOffset < currentOffset) maxOffset = currentOffset;
+}
+
+void SymbolTable::resolve(AST::VariableData &variable)
+{
+    if(scopes.empty()) throw std::runtime_error("[Symbol table] Trying to use variable without scope");
+
+    auto name = variable.getName();
+    for(auto it = scopes.rbegin(); it != scopes.rend(); ++it)
+    {
+        auto& symbols = it->symbols;
+        if(symbols.find(name) == symbols.end()) continue;
+
+        auto symbolOffset = symbols.at(name);
+        variable.resolve(symbolOffset);
+        return;
+    }
+
+    throw std::runtime_error("[Symbol table] Trying to use variable without declaration");
 }
 
 bool SymbolTable::validateStatement(const std::unique_ptr<AST::Statement> &statement)
 {
     if(auto* ptr = dynamic_cast<AST::VariableDeclaration*>(statement.get())) {
-        auto symbol = ptr->identificator;
+        auto& variableData = *dynamic_cast<AST::VariableData*>(ptr);
         auto& expression = ptr->value;
-        if(doesSymbolExist(symbol) || !isExpressionValid(expression)) return false;
-        addSymbol(symbol);
+        if(!validateExpression(expression)) return false;
+        declare(variableData);
         return true;
     }
     if(auto* ptr = dynamic_cast<AST::VariableAssignment*>(statement.get())) {
-        auto symbol = ptr->identificator;
+        auto& variableData = *dynamic_cast<AST::VariableData*>(ptr);
+        resolve(variableData);
+
         auto& expression = ptr->value;
-        return doesSymbolExist(symbol) && isExpressionValid(expression);
+        return validateExpression(expression);
     }
     if(auto* ptr = dynamic_cast<AST::IfStatement*>(statement.get())) {
         auto& condition = ptr->condition;
         auto& body = ptr->body;
-        return isExpressionValid(condition) && validateStatement(body);
+        return validateExpression(condition) && validateStatement(body);
     }
     if(auto* ptr = dynamic_cast<AST::WhileStatement*>(statement.get())) {
         auto& condition = ptr->condition;
         auto& body = ptr->body;
-        return isExpressionValid(condition) && validateStatement(body);
+        return validateExpression(condition) && validateStatement(body);
     }
     if(auto* ptr = dynamic_cast<AST::DisplayStatement*>(statement.get())) {
-        auto symbol = ptr->identificator;
-        return doesSymbolExist(symbol);
+        auto& expression = ptr->expression;
+        return validateExpression(expression);
     }
     if(auto* ptr = dynamic_cast<AST::CodeBlock*>(statement.get())) {
+        enterScope();
         for(auto& innerStatement : ptr->block)
         {
             if(!validateStatement(innerStatement)) return false;
         }
+        leaveScope();
         return true;
     }
 
     throw std::invalid_argument("Unrecognized statement");
 }
 
-bool SymbolTable::isExpressionValid(const std::unique_ptr<AST::Expression> &expression) const
+bool SymbolTable::validateExpression(const std::unique_ptr<AST::Expression> &expression)
 {
     if(dynamic_cast<AST::LiteralValue*>(expression.get()))
         return true;
-    if(auto* ptr = dynamic_cast<AST::VariableValue*>(expression.get()))
-        return doesSymbolExist(ptr->identificator);
+    if(auto* ptr = dynamic_cast<AST::VariableValue*>(expression.get())) {
+        auto& variableData = *dynamic_cast<AST::VariableData*>(ptr);
+        resolve(variableData);
+        return true;
+    }
     if(auto* ptr = dynamic_cast<AST::BinaryOperation*>(expression.get()))
-        return isExpressionValid(ptr->leftOperand) && isExpressionValid(ptr->rightOperand);
+        return validateExpression(ptr->leftOperand) && validateExpression(ptr->rightOperand);
     if(auto* ptr = dynamic_cast<AST::UnaryOperation*>(expression.get()))
-        return isExpressionValid(ptr->operand);
+        return validateExpression(ptr->operand);
     
     throw std::invalid_argument("Unrecognized expression");
 }
